@@ -1,0 +1,67 @@
+---
+title: "Penguins analysis"
+author: "R.G. Thomas"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+fontsize: 11pt
+geometry: "left=3cm,right=5cm,top=2cm,bottom=2cm"
+output:
+  pdf_document:
+    toc: true
+    number_sections: true
+    highlight: tango
+    keep_tex: true
+    includes:
+      in_header: "~/shr/preamble.tex"
+---
+
+```{r include=F, echo=F}
+library(pacman)
+p_load(palmerpenguins, tidyverse, knitr)
+
+opts_chunk$set(
+  warning = FALSE, message = FALSE, echo = FALSE, fig.width = 4,
+  fig.height = 2.1, results = "asis", dev = "pdf"
+)
+```
+
+# Introduction
+
+We can work with the dataset `penguins` included in the package `palmerpenguins`
+```{r }
+library(palmerpenguins)
+```
+
+One naive approach is to split the dataset and do three separate
+analyses:
+
+```{r }
+df1 <- split(penguins, penguins$species)
+```
+
+The R package `purrr` provides a straightforward method to conduct the
+analyses with a single command. Assume the set of data tables are
+contained in a list of dataframes.  Also assume the analysis is a simple
+visualization of a potential linear association between two features,
+
+```{r }
+df1 <- split(penguins, penguins$species)
+
+foo <- function(df, z) {
+  df |> ggplot(aes(x = bill_length_mm, y = flipper_length_mm)) +
+    geom_point(aes(color = island), alpha = .5) +
+    geom_smooth() +
+    scale_color_manual(values = c("purple", "green", "red")) +
+    theme_bw() +
+    labs(
+      title = paste(z, " Penguin Anatomy Comparison"), x = "Flipper length",
+      y = "Bill length", color = "Island"
+    )
+  plotfile_name <- paste0(z, ".pdf")
+  ggsave(plotfile_name)
+  cat(paste0("\\includegraphics[]{", plotfile_name, "}"), "\n")
+  cat(paste0("\\captionof{figure}{Scatterplot for species: ", z, "}"), "\n")
+  cat("\\vspace{1cm}", "\n")
+}
+
+bar <- df1 |> map2(names(df1), foo)
+```

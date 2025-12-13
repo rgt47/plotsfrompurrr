@@ -1,0 +1,3 @@
+Sep 04, 2024
+
+Look at GGally code for ideas on constructing a scatterplot matrix.
