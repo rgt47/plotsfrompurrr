@@ -11,8 +11,13 @@ document-type: "blog"
 :::
 
 ```{r include=F, echo=F}
-library(pacman)
-p_load(grid, patchwork, rlang, purrr, palmerpenguins, tidyverse, knitr)
+library(grid)
+library(patchwork)
+library(rlang)
+library(purrr)
+library(palmerpenguins)
+library(tidyverse)
+library(knitr)
 
 opts_chunk$set(
   warning = FALSE, message = FALSE, echo = FALSE, fig.width = 8,
