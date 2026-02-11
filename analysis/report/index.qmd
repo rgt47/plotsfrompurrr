@@ -1,119 +1,323 @@
 ---
-title: "Working example for generating multiple plots inside a map2 call"
-draft: false
-image: "media/images/purrr.jpg"
+title: >
+  Functional Plot Generation with purrr
+subtitle: >
+  Using map2 and pmap to programmatically build
+  scatter plot grids across penguin species
+author: "Ronald G. Thomas"
 date: today
+draft: false
+image: "media/images/hero.jpg"
 document-type: "blog"
+categories:
+  - R Programming
+  - Data Analysis & Visualization
+description: >
+  I did not really know how to programmatically generate
+  multiple plots from grouped data until I discovered
+  purrr's map2 and pmap functions -- this post walks
+  through the approach step by step using Palmer Penguins.
 execute:
-  eval: true
+  echo: true
+  warning: false
+  message: false
+format:
+  html:
+    code-fold: false
+    code-tools: false
 ---
 
-::: column-margin
-![purrr](media/images/purrr.jpg){width=2in}
-:::
+![Functional programming tools bring order to
+repetitive plotting tasks.
+](media/images/hero.jpg){.img-fluid width=80%}
 
-```{r include=F, echo=F}
-library(grid)
-library(patchwork)
-library(rlang)
-library(purrr)
-library(palmerpenguins)
-library(tidyverse)
-library(knitr)
-
-opts_chunk$set(
-  warning = FALSE, message = FALSE, echo = FALSE, fig.width = 8,
-  fig.height = 9, results = "asis"
-)
-```
+*Generating publication-quality plot grids without
+writing the same code three times.*
 
 # Introduction
 
-Consider the problem of running a data analysis requiring a separate
-analysis for each of `n` strata. For example consider an effort to model
-the relationship between `Bill length` and `Flipper length` across three
-different species of penguins.
+I did not really know how to programmatically generate
+multiple plots from grouped data until I started working
+with the Palmer Penguins dataset. The task seemed
+straightforward: produce scatter plots for every pairwise
+combination of numeric variables, separately for each
+penguin species, and then assemble them into a single
+coherent grid.
 
-We can work with the dataset `penguins` included in the package `palmerpenguins`
-```sh
+My first instinct was to copy-paste code for each species
+and each variable pair. That approach collapsed quickly
+once I counted the combinations: three species, four
+numeric variables, six pairwise combinations per species
+-- eighteen plots total. Copy-pasting eighteen ggplot
+calls is tedious, brittle, and nearly impossible to
+maintain.
+
+The `purrr` package solved this problem cleanly. By
+splitting the data by species and mapping a plotting
+function over every variable combination, I could
+generate all eighteen plots with a single pipeline and
+assemble them into a structured grid using `patchwork`.
+This post documents that workflow.
+
+## Motivations
+
+- I was tired of manually duplicating ggplot code for
+  each subgroup in a dataset.
+- I wanted to see all pairwise relationships between
+  numeric features at a glance, stratified by species.
+- I needed a workflow that could scale: if a fourth
+  species appeared in the data, the code should handle it
+  without modification.
+- I was curious whether `purrr::pmap` could handle the
+  three-argument case (x variable, y variable, grouping
+  variable) cleanly.
+- I wanted practice assembling complex multi-panel
+  layouts with `patchwork` beyond simple `+` and `/`
+  operators.
+
+## Objectives
+
+1. Split a data frame by a categorical variable (species)
+   and iterate over the resulting list with `map2`.
+2. Use `pmap` to map a plotting function across all
+   pairwise combinations of numeric columns.
+3. Assemble the resulting list of plots into a structured
+   grid using `patchwork::wrap_plots` with a custom
+   design layout string.
+4. Produce a final composite figure with species labels,
+   shared legends, and collected axis titles.
+
+I am documenting my learning process here. If you spot
+errors or have better approaches, please let me know in
+the contact section below.
+
+![A workspace for functional
+programming.](media/images/ambiance1.png){.img-fluid}
+
+# Prerequisites and Setup
+
+This post assumes familiarity with `ggplot2` and basic
+`tidyverse` operations. The key packages are:
+
+- `purrr` for functional iteration (`map2`, `pmap`)
+- `patchwork` for plot composition (`wrap_plots`,
+  `plot_layout`, `plot_spacer`)
+- `palmerpenguins` for the dataset
+- `rlang` for tidy evaluation (`.data[[var]]` pronoun)
+
+```{r}
+#| label: setup
 library(palmerpenguins)
+library(tidyverse)
+library(purrr)
+library(patchwork)
+library(rlang)
+library(grid)
 ```
 
-One naive approach is to split the dataset and do three separate
-analyses:
+The Palmer Penguins dataset contains measurements for
+344 penguins across three species (Adelie, Chinstrap,
+Gentoo) from three islands in the Palmer Archipelago,
+Antarctica.
 
+```{r}
+#| label: data-overview
+penguins |>
+  drop_na() |>
+  count(species) |>
+  knitr::kable(
+    caption = "Observations per species after
+    removing missing values."
+  )
+```
 
-The R package `purrr` provides a straightforward method to conduct the
-analyses with a single command. Assume the set of data tables are
-contained in a list of dataframes.  Also assume the analysis is a simple
-visualization of a potential linear association between two features,
+# What is Functional Plot Generation?
 
-```{r }
-df0 <- sample_n(penguins, 50) |> na.omit()
-# nn = 50 ; df1 = sample_n(penguins, 50)
-df1 <- split(df0, df0$species)
-# df2 = penguins |> group_by(species)
+Functional plot generation means treating plot creation
+as a function and then applying that function
+systematically across combinations of inputs. Instead of
+writing:
 
+```r
+# Do not do this for 18 combinations
+plot_adelie_bill_flipper <- ggplot(...)
+plot_adelie_bill_body   <- ggplot(...)
+plot_adelie_bill_depth  <- ggplot(...)
+# ... 15 more times
+```
 
-ct <- names(df0)[3:6]
-# mm = expand.grid(names(df1[3:6]), names(df1[3:6]))
-nn <- t(combn(ct, 2))
-colnames(nn) <- letters[1:2]
-nn2 <- data.frame(nn) |> cbind(g = "sex")
+you write one plotting function and let `purrr` call it
+for every combination of species, x-variable, and
+y-variable. The output is a list of ggplot objects that
+you can arrange into any layout.
 
-zz.scatter <- function(data, formula, ...) {
-  # function to take a dataframe, and a formula with potentially a '|' group
-  # 	option and return scatterplot matrix with optional R^2, loess smooth,
-  # 	or least squares line.
+Think of it like a mail merge: you define the template
+once and let the data fill in the blanks.
+
+# Getting Started: Preparing the Data
+
+The first step is to sample from the penguins data and
+split it into a named list by species. We also compute
+all pairwise combinations of the four numeric columns
+(`bill_length_mm`, `bill_depth_mm`, `flipper_length_mm`,
+`body_mass_g`).
+
+```{r}
+#| label: prepare-data
+set.seed(42)
+df_sampled <- penguins |>
+  sample_n(50) |>
+  drop_na()
+
+df_by_species <- split(df_sampled, df_sampled$species)
+
+numeric_cols <- names(df_sampled)[3:6]
+pairs <- t(combn(numeric_cols, 2))
+colnames(pairs) <- c("x_var", "y_var")
+pair_grid <- as.data.frame(pairs) |>
+  mutate(group_var = "sex")
+```
+
+The `pair_grid` data frame now holds six rows, one for
+each pairwise combination. Each row names an x-variable,
+a y-variable, and a grouping variable (sex) for colour
+coding within each species panel.
+
+```{r}
+#| label: show-pairs
+pair_grid |>
+  knitr::kable(
+    caption = "All pairwise variable combinations
+    to plot."
+  )
+```
+
+# Building the Plotting Function
+
+The core of the workflow is a single function that
+accepts variable names as strings and a data frame, then
+returns a ggplot object. The `.data[[var]]` pronoun from
+`rlang` allows column selection by string name inside
+`aes()`.
+
+```{r}
+#| label: define-plot-function
+make_scatter <- function(x_var, y_var,
+                         group_var, species_name,
+                         df) {
+  df |>
+    ggplot(aes(
+      x = .data[[x_var]],
+      y = .data[[y_var]]
+    )) +
+    geom_point(
+      aes(color = .data[[group_var]]),
+      alpha = 0.5
+    ) +
+    geom_smooth(
+      method = "loess",
+      se = TRUE,
+      linewidth = 0.7
+    ) +
+    scale_color_manual(
+      values = c("purple", "green", "red")
+    ) +
+    theme_bw() +
+    theme(text = element_text(size = 8))
 }
+```
 
-plt1 <- function(a, b, g, spc, df_split) {
-  out_plot <- df_split |> ggplot(aes(x = .data[[a]], y = .data[[b]])) +
-    geom_point(aes(color = .data[[g]]), alpha = .5) +
-    geom_smooth() +
-    scale_color_manual(values = c("purple", "green", "red")) +
-    theme_bw()
-  assign(paste0(spc, "_", a, "_", b), value = out_plot, envir = .GlobalEnv)
-  return(out_plot)
-}
+Two design choices deserve explanation. First,
+`geom_smooth(method = "loess")` adds a local regression
+line so we can see nonlinear trends. Second, the function
+does not set titles -- those will come from the grid
+layout labels. Keeping the function minimal makes it
+reusable across different layouts.
 
+![Iterating with purpose across data
+strata.](media/images/ambiance2.jpg){.img-fluid}
 
-temp <- df1 |> map2(names(df1), function(df_split, spc) {
-  nn2 |> pmap(function(a, b, g) {
-    plt1(b, a, g, spc, df_split)
+# Mapping Across Species and Variable Pairs
+
+This is the heart of the approach. We use `map2` to
+iterate over the list of species data frames and their
+names simultaneously. Inside that outer loop, `pmap`
+iterates over every row of `pair_grid`, calling
+`make_scatter` with the appropriate variable names.
+
+```{r}
+#| label: generate-all-plots
+all_plots <- df_by_species |>
+  map2(names(df_by_species), function(df, spc) {
+    pair_grid |>
+      pmap(function(x_var, y_var, group_var) {
+        make_scatter(
+          x_var, y_var, group_var, spc, df
+        )
+      })
   })
-})
+```
 
-temp2 = list_flatten(temp)
-X <- grid::textGrob("Species 1")
-temp2[[2]] = plot_spacer()
-temp2[[4]] = X
-wrap_plots(temp2, ncol=3, nrow=6) +
-  plot_layout(
-    guides = "collect",
-    axis_titles = "collect"
-  ) 
-A <- temp[[1]][[1]]
-p2 <- temp[[1]][[2]]
-p3 <- temp[[1]][[3]]
-p4 <- temp[[1]][[4]]
-p5 <- temp[[1]][[5]]
-p6 <- temp[[1]][[6]]
-p7 <- temp[[2]][[1]]
-p8 <- temp[[2]][[2]]
-p9 <- temp[[2]][[3]]
-p10 <- temp[[2]][[4]]
-p11 <- temp[[2]][[5]]
-p12 <- temp[[2]][[6]]
-p13 <- temp[[3]][[1]]
-p14 <- temp[[3]][[2]]
-p15 <- temp[[3]][[3]]
-p16 <- temp[[3]][[4]]
-p17 <- temp[[3]][[5]]
-p18 <- temp[[3]][[6]]
-# names(temp)
+The result `all_plots` is a nested list: the outer level
+has three elements (one per species), and each inner
+level has six elements (one per variable pair). That
+gives us eighteen ggplot objects total, organized by
+species.
 
-layout <- "
+```{r}
+#| label: verify-structure
+cat(
+  "Species:", length(all_plots), "\n",
+  "Plots per species:", length(all_plots[[1]]), "\n",
+  "Total plots:", sum(lengths(all_plots)), "\n"
+)
+```
+
+# Assembling the Grid with Patchwork
+
+The final step is arranging all eighteen plots into a
+structured grid. I want each species to occupy one row
+group, with a text label identifying the species. The
+`patchwork` package supports custom layout strings where
+each letter maps to a named plot element.
+
+## Extracting Individual Plots
+
+First, we pull every plot out of the nested list and
+assign readable names.
+
+```{r}
+#| label: extract-plots
+p1  <- all_plots[[1]][[1]]
+p2  <- all_plots[[1]][[2]]
+p3  <- all_plots[[1]][[3]]
+p4  <- all_plots[[1]][[4]]
+p5  <- all_plots[[1]][[5]]
+p6  <- all_plots[[1]][[6]]
+p7  <- all_plots[[2]][[1]]
+p8  <- all_plots[[2]][[2]]
+p9  <- all_plots[[2]][[3]]
+p10 <- all_plots[[2]][[4]]
+p11 <- all_plots[[2]][[5]]
+p12 <- all_plots[[2]][[6]]
+p13 <- all_plots[[3]][[1]]
+p14 <- all_plots[[3]][[2]]
+p15 <- all_plots[[3]][[3]]
+p16 <- all_plots[[3]][[4]]
+p17 <- all_plots[[3]][[5]]
+p18 <- all_plots[[3]][[6]]
+```
+
+## Defining the Layout
+
+The layout string below arranges plots in an upper
+triangular pattern for each species, with text labels
+(X, Y, Z) marking each species group. Each letter in the
+string maps to one named plot element in `wrap_plots`.
+
+```{r}
+#| label: define-layout
+layout_string <- "
 X##
 ABC
 #DE
@@ -127,15 +331,58 @@ MNO
 #PQ
 ##R
 "
-X <- grid::textGrob("Species 1")
-t2 <- grid::textGrob("Species 2")
-t3 <- grid::textGrob("Species 3")
+```
 
-out <- wrap_plots(
-  X , A, B = p2, C = p3, D = p4, E = p5, F = p6, Y = t2,
-  G = p7, H = p8, I = p9, J = p10, K = p11, L = p12, Z = t3,
-  M = p13, N = p14, O = p15, P = p16, Q = p17, R = p18,
-  design = layout
+The `#` characters represent empty cells. This produces
+a staircase pattern: three plots in the first row, two
+in the second, one in the third -- mirroring the upper
+triangle of a pairwise comparison matrix.
+
+## Composing the Final Figure
+
+We create text labels for each species using
+`grid::textGrob` and pass everything to `wrap_plots`.
+
+```{r}
+#| label: final-composite
+#| fig-width: 8
+#| fig-height: 10
+#| fig-cap: >
+#|   Pairwise scatter plots for four numeric
+#|   penguin measurements, stratified by species.
+#|   Each row group shows one species with a LOESS
+#|   smooth and points coloured by sex.
+#| fig-alt: >
+#|   A grid of 18 scatter plots arranged in three
+#|   upper-triangular blocks, one per penguin
+#|   species, showing pairwise relationships between
+#|   bill length, bill depth, flipper length, and
+#|   body mass with LOESS smoothing lines.
+
+label_sp1 <- grid::textGrob(
+  names(df_by_species)[1],
+  gp = gpar(fontsize = 10, fontface = "bold")
+)
+label_sp2 <- grid::textGrob(
+  names(df_by_species)[2],
+  gp = gpar(fontsize = 10, fontface = "bold")
+)
+label_sp3 <- grid::textGrob(
+  names(df_by_species)[3],
+  gp = gpar(fontsize = 10, fontface = "bold")
+)
+
+composite <- wrap_plots(
+  X = label_sp1,
+  A = p1,  B = p2,  C = p3,
+  D = p4,  E = p5,  F = p6,
+  Y = label_sp2,
+  G = p7,  H = p8,  I = p9,
+  J = p10, K = p11, L = p12,
+  Z = label_sp3,
+  M = p13, N = p14, O = p15,
+  P = p16, Q = p17, R = p18,
+  design = layout_string
 ) +
   plot_layout(
     guides = "collect",
@@ -147,38 +394,206 @@ out <- wrap_plots(
     text = element_text(size = 8)
   )
 
-out
+composite
 ```
 
-# Plots for  every variable and each species map inside map see ref 2 below
+The `guides = "collect"` argument consolidates duplicate
+legends into a single shared legend at the bottom. The
+`axis_titles = "collect"` argument prevents repeated axis
+labels across panels. Together, these two settings
+produce a clean, readable composite figure.
 
-# combine plots in a upper triangular grid with correlation coefs
+## Things to Watch Out For
 
-# Code
+1. **Variable types matter.** The `.data[[var]]` pronoun
+   works only when the column name is a string. If you
+   pass a symbol instead, you will get cryptic
+   subscription errors.
 
-```{r, attr.source='.numberLines', ref.label=knitr::all_labels(),echo=TRUE,eval=FALSE}
+2. **Missing data propagates.** If you forget
+   `drop_na()` before splitting, some species subsets
+   will contain `NA` rows, and `geom_smooth` will warn
+   about removed observations.
+
+3. **Layout string alignment.** Every row in the
+   `patchwork` layout string must have the same number
+   of characters. A misaligned row silently produces
+   an incorrect layout.
+
+4. **Global environment side effects.** The original
+   draft used `assign(..., envir = .GlobalEnv)` inside
+   the plotting function. This is fragile and pollutes
+   the workspace. Returning the plot object and storing
+   it in a list is cleaner and more predictable.
+
+5. **Sample size per species.** When sampling 50 rows
+   from the full dataset, some species may end up with
+   very few observations. For production analyses, use
+   the full dataset or stratified sampling to ensure
+   adequate representation.
+
+![Assembling the pieces into a coherent
+whole.](media/images/ambiance3.jpg){.img-fluid}
+
+## Lessons Learnt
+
+### Conceptual Understanding
+
+- Pairwise scatter plot matrices provide a rapid visual
+  summary of relationships between continuous features,
+  but they scale quadratically: four variables produce
+  six pairs, five produce ten.
+- Stratification by species reveals within-group
+  patterns that pooled analyses obscure (Simpson's
+  paradox).
+- LOESS smoothers are useful for initial exploration but
+  carry no inferential interpretation without further
+  modeling.
+- The upper-triangular layout avoids redundancy by
+  showing each pair exactly once.
+
+### Technical Skills
+
+- `purrr::map2` iterates over two lists in parallel --
+  ideal for pairing data frames with their names.
+- `purrr::pmap` generalises to arbitrary numbers of
+  arguments by iterating over rows of a data frame.
+- `rlang::.data[[var]]` enables column selection by
+  string name inside `aes()`, which is essential for
+  programmatic ggplot construction.
+- `patchwork::wrap_plots` with a custom `design` string
+  provides fine-grained control over multi-panel layouts.
+
+### Gotchas and Pitfalls
+
+- Forgetting `drop_na()` before `split()` produces
+  species-level data frames with missing rows that cause
+  warnings in `geom_smooth`.
+- The `plot_spacer()` function is useful for empty cells,
+  but the `#` character in the design string is more
+  readable for fixed layouts.
+- `assign()` to `.GlobalEnv` inside mapped functions
+  creates hard-to-debug side effects. Always return
+  values from functions and collect them in lists.
+- `scale_color_manual` requires the correct number of
+  colour values matching the levels of the grouping
+  variable.
+
+## Limitations
+
+- The sample of 50 penguins is small. Some species may
+  have fewer than 10 observations, making LOESS fits
+  unreliable.
+- The grouping variable (sex) is hard-coded. A more
+  general approach would accept the grouping variable
+  as a parameter.
+- The layout string is manually crafted for exactly
+  three species and six variable pairs. Adding a fourth
+  species or fifth numeric variable requires rewriting
+  the layout.
+- No statistical tests accompany the visual exploration.
+  The plots show associations but do not quantify
+  significance or effect size.
+- The colour palette (purple, green, red) is not
+  colourblind-friendly. Production code should use a
+  palette validated for accessibility.
+
+## Opportunities for Improvement
+
+1. Replace the hard-coded layout string with a function
+   that generates the design string dynamically based
+   on the number of species and variable pairs.
+2. Add correlation coefficients as text annotations
+   inside each scatter plot panel.
+3. Use `GGally::ggpairs` as a comparison point --
+   it handles pairwise plots natively, though with less
+   layout flexibility.
+4. Implement stratified sampling with
+   `dplyr::slice_sample(n, by = species)` to ensure
+   balanced representation.
+5. Replace the manual plot extraction (p1 through p18)
+   with a programmatic approach using `list_flatten`
+   and named assignment.
+6. Switch to a colourblind-friendly palette such as
+   `viridis` or the Okabe-Ito palette.
+
+# Wrapping Up
+
+This post demonstrated how `purrr::map2` and
+`purrr::pmap` can replace copy-pasted ggplot code with
+a single functional pipeline. The key insight is that
+plots are objects: you can store them in lists, pass
+them to functions, and assemble them programmatically.
+
+The approach worked well for the Palmer Penguins data.
+Starting from a single plotting function and a table of
+variable combinations, we generated eighteen scatter
+plots and arranged them into a structured grid that
+reveals within-species patterns. The total code is
+compact enough to fit in a single script, yet flexible
+enough to adapt to new datasets.
+
+If you are working with grouped data and finding
+yourself copying ggplot code, try this pattern:
+
+- **Split** the data by your grouping variable.
+- **Define** a single plotting function that accepts
+  column names as strings.
+- **Map** the function across all combinations using
+  `pmap`.
+- **Assemble** the resulting list with `patchwork`.
+
+# See Also
+
+- [Automating exploratory plots with ggplot2 and
+  purrr](https://aosmith.rbind.io/2018/08/20/automating-exploratory-plots/)
+  -- Ariel Muldoon's tutorial on the same pattern with
+  detailed examples.
+- [Principal components and
+  penguins](https://www.r-bloggers.com/2021/06/principal-components-and-penguins-by-ellis2013nz/)
+  -- PCA as an alternative to pairwise scatter plots
+  for high-dimensional penguin data.
+- [purrr documentation](https://purrr.tidyverse.org/)
+  -- Official reference for `map`, `map2`, and `pmap`.
+- [patchwork
+  documentation](https://patchwork.data-imaginist.com/)
+  -- Guide to plot composition and layout design.
+- [Programming with
+  dplyr](https://dplyr.tidyverse.org/articles/programming.html)
+  -- Background on `.data[[var]]` and tidy evaluation.
+
+# Reproducibility
+
+This analysis uses the `palmerpenguins` built-in dataset
+and requires no external data files. To reproduce:
+
+```bash
+quarto render index.qmd
 ```
 
+**Session information:**
 
-# References
+```{r}
+#| label: session-info
+sessionInfo()
+```
 
-[principal components analysis](https://www.r-bloggers.com/2021/06/principal-components-and-penguins-by-ellis2013nz/)
+# Let's Connect
 
+- **GitHub:** [rgt47](https://github.com/rgt47)
+- **Twitter/X:** [@rgt47](https://twitter.com/rgt47)
+- **LinkedIn:**
+  [Ronald Glenn Thomas](https://linkedin.com/in/rgthomaslab)
+- **Email:**
+  [rgtlab.org/contact](https://rgtlab.org/contact)
 
-[Automating exploratory plots with ggplot2 and purrr](https://aosmith.rbind.io/2018/08/20/automating-exploratory-plots/)
+I would enjoy hearing from you if:
 
-## Prerequisites
-
-In development
-
-## Step-by-Step Implementation
-
-In development
-
-## Key Takeaways
-
-In development
-
-## Further Reading
-
-In development
+- You spot an error or a better approach to any of the
+  code in this post.
+- You have suggestions for topics you would like to see
+  covered.
+- You want to discuss R programming, data science, or
+  reproducible research.
+- You have questions about anything in this tutorial.
+- You just want to say hello and connect.
