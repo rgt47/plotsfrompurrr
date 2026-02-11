@@ -1,6 +1,6 @@
 ---
 title: "Working example for generating multiple plots inside a map2 call"
-draft: true
+draft: false
 image: "media/images/purrr.jpg"
 date: today
 document-type: "blog"
