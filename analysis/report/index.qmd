@@ -4,6 +4,8 @@ draft: true
 image: "media/images/purrr.jpg"
 date: today
 document-type: "blog"
+execute:
+  eval: true
 ---
 
 ::: column-margin
