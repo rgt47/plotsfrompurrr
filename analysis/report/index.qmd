@@ -9,7 +9,7 @@ date: today
 draft: false
 image: "media/images/hero.jpg"
 document-type: "blog"
-categories:
+categories: [r, purrr, ggplot2, functional-programming, data-visualization]
   - R Programming
   - Data Analysis & Visualization
 description: >
