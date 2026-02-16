@@ -91,8 +91,7 @@ I am documenting my learning process here. If you spot
 errors or have better approaches, please let me know in
 the contact section below.
 
-![A workspace for functional
-programming.](media/images/ambiance1.png){.img-fluid}
+![](media/images/purrr-logo.png){.img-fluid width=30% fig-align="center"}
 
 # Prerequisites and Setup
 
