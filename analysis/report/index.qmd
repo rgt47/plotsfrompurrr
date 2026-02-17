@@ -10,8 +10,6 @@ draft: false
 image: "media/images/hero.jpg"
 document-type: "blog"
 categories: [r, purrr, ggplot2, functional-programming, data-visualization]
-  - R Programming
-  - Data Analysis & Visualization
 description: >
   I did not really know how to programmatically generate
   multiple plots from grouped data until I discovered
