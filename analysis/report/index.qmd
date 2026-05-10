@@ -89,7 +89,7 @@ I am documenting my learning process here. If you spot
 errors or have better approaches, please let me know in
 the contact section below.
 
-![Functional programming and visualisation.](media/images/placeholder-coffee-03.jpg){.img-fluid}
+![Functional programming and visualisation.](media/images/ambiance1.png){.img-fluid}
 
 # Prerequisites and Setup
 
