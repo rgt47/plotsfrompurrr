@@ -1,9 +1,6 @@
 ---
 title: >
   Functional Plot Generation with purrr
-subtitle: >
-  Using map2 and pmap to programmatically build
-  scatter plot grids across penguin species
 author: "Ronald 'Ryy' G. Thomas"
 date: today
 draft: false
@@ -27,7 +24,7 @@ format:
 
 ![Functional programming tools bring order to
 repetitive plotting tasks.
-](media/images/hero.jpg){.img-fluid width=80%}
+](media/images/hero.jpg){.img-fluid width=80% fig-align="center"}
 
 *Generating publication-quality plot grids without
 writing the same code three times.*
