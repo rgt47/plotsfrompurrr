@@ -82,9 +82,9 @@ This post documents that workflow.
 4. Produce a final composite figure with species labels,
    shared legends, and collected axis titles.
 
-I am documenting my learning process here. If you spot
-errors or have better approaches, please let me know in
-the contact section below.
+I am documenting my learning process here. Errors and
+better approaches are welcome; see the contact section
+below.
 
 ![Functional programming and visualisation.](media/images/ambiance1.png){.img-fluid}
 
@@ -140,13 +140,13 @@ plot_adelie_bill_depth  <- ggplot(...)
 # ... 15 more times
 ```
 
-you write one plotting function and let `purrr` call it
-for every combination of species, x-variable, and
-y-variable. The output is a list of ggplot objects that
-you can arrange into any layout.
+one writes a single plotting function and lets `purrr`
+call it for every combination of species, x-variable,
+and y-variable. The output is a list of ggplot objects
+that can be arranged into any layout.
 
-Think of it like a mail merge: you define the template
-once and let the data fill in the blanks.
+Think of it like a mail merge: the template is defined
+once and the data fills in the blanks.
 
 # Getting Started: Preparing the Data
 
@@ -224,8 +224,8 @@ make_scatter <- function(x_var, y_var,
 Two design choices deserve explanation. First,
 `geom_smooth(method = "loess")` adds a local regression
 line so we can see nonlinear trends. Second, the function
-does not set titles -- those will come from the grid
-layout labels. Keeping the function minimal makes it
+does not set titles (those come from the grid layout
+labels). Keeping the function minimal makes it
 reusable across different layouts.
 
 ![Iterating with purpose across data
@@ -329,8 +329,8 @@ MNO
 
 The `#` characters represent empty cells. This produces
 a staircase pattern: three plots in the first row, two
-in the second, one in the third -- mirroring the upper
-triangle of a pairwise comparison matrix.
+in the second, one in the third (mirroring the upper
+triangle of a pairwise comparison matrix).
 
 ## Composing the Final Figure
 
@@ -400,14 +400,14 @@ produce a clean, readable composite figure.
 ## Things to Watch Out For
 
 1. **Variable types matter.** The `.data[[var]]` pronoun
-   works only when the column name is a string. If you
-   pass a symbol instead, you will get cryptic
-   subscription errors.
+   works only when the column name is a string. Passing
+   a symbol instead produces cryptic subscription
+   errors.
 
-2. **Missing data propagates.** If you forget
-   `drop_na()` before splitting, some species subsets
-   will contain `NA` rows, and `geom_smooth` will warn
-   about removed observations.
+2. **Missing data propagates.** Omitting `drop_na()`
+   before splitting leaves `NA` rows in some species
+   subsets, causing `geom_smooth` to warn about removed
+   observations.
 
 3. **Layout string alignment.** Every row in the
    `patchwork` layout string must have the same number
@@ -518,8 +518,8 @@ whole.](media/images/ambiance3.jpg){.img-fluid}
 This post demonstrated how `purrr::map2` and
 `purrr::pmap` can replace copy-pasted ggplot code with
 a single functional pipeline. The key insight is that
-plots are objects: you can store them in lists, pass
-them to functions, and assemble them programmatically.
+plots are objects that can be stored in lists, passed
+to functions, and assembled programmatically.
 
 The approach worked well for the Palmer Penguins data.
 Starting from a single plotting function and a table of
@@ -529,8 +529,8 @@ reveals within-species patterns. The total code is
 compact enough to fit in a single script, yet flexible
 enough to adapt to new datasets.
 
-If you are working with grouped data and finding
-yourself copying ggplot code, try this pattern:
+When working with grouped data and finding repetitive
+ggplot code, this pattern is worth trying:
 
 - **Split** the data by your grouping variable.
 - **Define** a single plotting function that accepts
@@ -542,21 +542,21 @@ yourself copying ggplot code, try this pattern:
 # See Also
 
 - [Automating exploratory plots with ggplot2 and
-  purrr](https://aosmith.rbind.io/2018/08/20/automating-exploratory-plots/)
-  -- Ariel Muldoon's tutorial on the same pattern with
+  purrr](https://aosmith.rbind.io/2018/08/20/automating-exploratory-plots/):
+  Ariel Muldoon's tutorial on the same pattern with
   detailed examples.
 - [Principal components and
-  penguins](https://www.r-bloggers.com/2021/06/principal-components-and-penguins-by-ellis2013nz/)
-  -- PCA as an alternative to pairwise scatter plots
+  penguins](https://www.r-bloggers.com/2021/06/principal-components-and-penguins-by-ellis2013nz/):
+  PCA as an alternative to pairwise scatter plots
   for high-dimensional penguin data.
-- [purrr documentation](https://purrr.tidyverse.org/)
-  -- Official reference for `map`, `map2`, and `pmap`.
+- [purrr documentation](https://purrr.tidyverse.org/):
+  Official reference for `map`, `map2`, and `pmap`.
 - [patchwork
-  documentation](https://patchwork.data-imaginist.com/)
-  -- Guide to plot composition and layout design.
+  documentation](https://patchwork.data-imaginist.com/):
+  Guide to plot composition and layout design.
 - [Programming with
-  dplyr](https://dplyr.tidyverse.org/articles/programming.html)
-  -- Background on `.data[[var]]` and tidy evaluation.
+  dplyr](https://dplyr.tidyverse.org/articles/programming.html):
+  Background on `.data[[var]]` and tidy evaluation.
 
 # Reproducibility
 
@@ -585,11 +585,10 @@ sessionInfo()
 
 I would enjoy hearing from you if:
 
-- You spot an error or a better approach to any of the
-  code in this post.
-- You have suggestions for topics you would like to see
-  covered.
-- You want to discuss R programming, data science, or
-  reproducible research.
-- You have questions about anything in this tutorial.
-- You just want to say hello and connect.
+- An error or a better approach to any of the code
+  in this post comes to mind.
+- There are suggestions for topics to see covered.
+- The interest is in discussing R programming, data
+  science, or reproducible research.
+- There are questions about anything in this tutorial.
+- The goal is simply to say hello and connect.
